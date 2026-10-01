@@ -1,0 +1,124 @@
+# For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+# This workflow is triggered automatically on pushes to main/master, or manually on the "Actions" tab on GitHub.
+
+name: Build Windows GDExtension
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'project/docs/**'
+  pull_request:
+    branches: [ "main", "master" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'project/docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target-type: [template_debug]
+
+    runs-on: windows-latest
+    steps:
+      # Shallow clone with submodules for fast checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      # Initialize MSVC environment for fast multi-threaded compilation
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Setup godot-cpp dependencies
+      - name: Setup godot-cpp
+        uses: ./godot-cpp/.github/actions/setup-godot-cpp
+        with:
+          platform: windows
+          windows-compiler: msvc
+
+      # ── Cache 1: godot-cpp object files (.o) ──────────────────
+      # Key = submodule SHA → only rebuilds when godot-cpp itself changes.
+      # Your src/ changes never touch these .o files.
+      - name: Get godot-cpp submodule SHA
+        id: godot_sha
+        shell: pwsh
+        run: |
+          $sha = git submodule status godot-cpp | Select-String -Pattern '[0-9a-f]{40}' | ForEach-Object { $_.Matches[0].Value }
+          echo "sha=$sha" >> $env:GITHUB_OUTPUT
+
+      - name: Restore godot-cpp object cache
+        id: godot_cache
+        uses: actions/cache@v4
+        with:
+          path: .scons-cache-godot/
+          key: godot-cpp-${{ matrix.target-type }}-${{ steps.godot_sha.outputs.sha }}
+
+      # ── Cache 2: your src/ object files (.o) ──────────────────
+      # Key includes hash of src/ → rebuilds only your changed files.
+      - name: Restore src object cache
+        uses: actions/cache@v4
+        with:
+          path: .scons-cache-src/
+          key: src-${{ matrix.target-type }}-${{ hashFiles('src/**') }}
+          restore-keys: |
+            src-${{ matrix.target-type }}-
+
+      # Always build godot-cpp — SCons cache makes recompilation near-instant
+      # on cache hit (only relinks the .a). Skipping entirely would leave
+      # godot-cpp/bin/*.a missing and break the GDExtension link step.
+      - name: Build godot-cpp
+        shell: pwsh
+        env:
+          SCONS_CACHE: ${{ github.workspace }}/.scons-cache-godot/
+          SCONS_CACHE_LIMIT: 4000
+        run: |
+          scons -j $env:NUMBER_OF_PROCESSORS target=${{ matrix.target-type }} platform=windows arch=x86_64 precision=single disable_exceptions=no custom_modules_shared=no
+
+      # Build GDExtension (your src/ only, godot-cpp .o reused from cache)
+      - name: Build GDExtension
+        shell: pwsh
+        env:
+          SCONS_CACHE: ${{ github.workspace }}/.scons-cache-src/
+          SCONS_CACHE_LIMIT: 1000
+        run: |
+          scons -j $env:NUMBER_OF_PROCESSORS target=${{ matrix.target-type }} platform=windows arch=x86_64 precision=single disable_exceptions=no
+
+      # Save both caches after build
+      - name: Save godot-cpp object cache
+        if: steps.godot_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .scons-cache-godot/
+          key: godot-cpp-${{ matrix.target-type }}-${{ steps.godot_sha.outputs.sha }}
+
+      - name: Save src object cache
+        uses: actions/cache/save@v4
+        with:
+          path: .scons-cache-src/
+          key: src-${{ matrix.target-type }}-${{ hashFiles('src/**') }}
+
+      # Clean up compilation files
+      - name: Windows - Delete compilation files
+        shell: pwsh
+        run: |
+          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
+
+      # Upload the build
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-gdextension-windows-${{ matrix.target-type }}
+          retention-days: 14
+          path: |
+            project/bin/windows/
+            project/bin/example.gdextension
