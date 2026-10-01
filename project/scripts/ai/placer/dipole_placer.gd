@@ -167,4 +167,3 @@ static func _is_multi_terminal(type: CircuitComponent.Type) -> bool:
 		CircuitComponent.Type.TRIAC, CircuitComponent.Type.IC:
 			return true
 	return false
-
