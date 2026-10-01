@@ -78,6 +78,17 @@ func _ready() -> void:
 	btn_ai_image.pressed.connect(_on_ai_image_pressed)
 	h_box.add_child(btn_ai_image)
 
+	var sep4 = VSeparator.new()
+	h_box.add_child(sep4)
+
+	# Simulate button
+	var btn_simulate = Button.new()
+	btn_simulate.text = "▶ Simular (.op)"
+	btn_simulate.tooltip_text = "Ejecutar simulación ngspice (.op) y calcular V, P en componentes e I en nodos"
+	btn_simulate.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
+	btn_simulate.pressed.connect(func(): intent_dispatched.emit(CircuitIntent.create_run_simulation()))
+	h_box.add_child(btn_simulate)
+
 	# FileDialog for Image Selection
 	var file_dialog = FileDialog.new()
 	file_dialog.name = "AIFileDialog"

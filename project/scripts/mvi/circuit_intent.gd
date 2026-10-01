@@ -25,7 +25,8 @@ enum IntentType {
 	SET_AI_RESULT,
 	TOGGLE_AI_PANEL,
 	BUILD_CIRCUIT_FROM_AI,
-	RUN_SIMULATION
+	RUN_SIMULATION,
+	EXECUTE_SPICE_COMMAND
 }
 
 var type: IntentType
@@ -186,4 +187,10 @@ static func create_build_circuit_from_ai(p_text: String, p_mode: int = 0) -> Ref
 static func create_run_simulation() -> RefCounted:
 	var i = CircuitIntent.new()
 	i.type = IntentType.RUN_SIMULATION
+	return i
+
+static func create_execute_spice_command(p_cmd: String) -> RefCounted:
+	var i = CircuitIntent.new()
+	i.type = IntentType.EXECUTE_SPICE_COMMAND
+	i.value_string = p_cmd
 	return i

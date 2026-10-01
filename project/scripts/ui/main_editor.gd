@@ -3,12 +3,13 @@ extends Control
 
 
 
+const WorkbenchPanelClass = preload("res://scripts/ui/panels/workbench_panel.gd")
+
 var store: CircuitStore
 var canvas: SchematicCanvas
 var toolbar: ToolbarPanel
 var inspector: InspectorPanel
-var netlist: NetlistPanel
-var ai_panel: AIAssistantPanel
+var workbench: WorkbenchPanelClass
 var gemini_service: GeminiService
 
 func _ready() -> void:
@@ -70,27 +71,17 @@ func _build_ui_hierarchy() -> void:
 	inspector.intent_dispatched.connect(_on_intent_dispatched)
 	h_split.add_child(inspector)
 
-	# 2b. Bottom Section: Split between ngspice Netlist and Gemini AI Assistant Panel
-	var bottom_h_split = HSplitContainer.new()
-	bottom_h_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	bottom_h_split.split_offset = 550
-	v_split.add_child(bottom_h_split)
-
-	netlist = NetlistPanel.new()
-	netlist.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom_h_split.add_child(netlist)
-
-	ai_panel = AIAssistantPanel.new()
-	ai_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ai_panel.intent_dispatched.connect(_on_intent_dispatched)
-	bottom_h_split.add_child(ai_panel)
+	# 2b. Bottom Section: Workbench Dock (Reconstructor, Simulation, SPICE Terminal)
+	workbench = WorkbenchPanelClass.new()
+	workbench.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workbench.intent_dispatched.connect(_on_intent_dispatched)
+	v_split.add_child(workbench)
 
 func _render_state(new_state: CircuitState) -> void:
 	canvas.set_state(new_state)
 	toolbar.update_active_tool(new_state.active_tool)
 	inspector.update_selection(new_state)
-	netlist.update_netlist(new_state)
-	ai_panel.update_ai_state(new_state)
+	workbench.update_state(new_state)
 
 func _on_intent_dispatched(intent: CircuitIntent) -> void:
 	if intent.type == CircuitIntent.IntentType.ANALYZE_IMAGE:

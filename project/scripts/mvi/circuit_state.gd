@@ -33,6 +33,7 @@ var pan_offset: Vector2 = Vector2.ZERO
 var zoom_level: float = 1.0
 
 var netlist_text: String = ""
+var node_map: Dictionary = {} # pin_id -> node_name
 var warnings: Array[String] = []
 var errors: Array[String] = []
 var has_ground: bool = false
@@ -57,8 +58,10 @@ var sim_is_running: bool = false
 var sim_results: Dictionary = {}
 var sim_node_voltages: Dictionary = {}
 var sim_branch_currents: Dictionary = {}
+var sim_report: String = ""
 var sim_log: String = ""
 var sim_error: String = ""
+var terminal_log: String = "ngspice interactive console ready.\nType commands (e.g. 'op', 'print all', 'display') and press Enter.\n"
 
 func is_selected(id: String) -> bool:
 	return id in selected_ids
@@ -143,6 +146,7 @@ func clone() -> RefCounted:
 	s.pan_offset = pan_offset
 	s.zoom_level = zoom_level
 	s.netlist_text = netlist_text
+	s.node_map = node_map.duplicate()
 	s.warnings = warnings.duplicate()
 	s.errors = errors.duplicate()
 	s.has_ground = has_ground
@@ -156,6 +160,8 @@ func clone() -> RefCounted:
 	s.sim_results = sim_results.duplicate(true)
 	s.sim_node_voltages = sim_node_voltages.duplicate()
 	s.sim_branch_currents = sim_branch_currents.duplicate()
+	s.sim_report = sim_report
 	s.sim_log = sim_log
 	s.sim_error = sim_error
+	s.terminal_log = terminal_log
 	return s

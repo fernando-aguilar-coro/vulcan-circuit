@@ -51,4 +51,4 @@ cmake-build*
 CMakeUserPresets.json
 
 # Ignorar cache autogenerado de Godot en project
-project/
+project/.godot/
