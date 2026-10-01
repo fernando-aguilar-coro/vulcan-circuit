@@ -198,6 +198,54 @@ static func generate_ngspice_netlist(circuit_name: String, components: Dictionar
 				# SPICE convention: Ixxx N_from N_to DCVAL (current leaves N_from into N_to)
 				lines.append("%s %s %s DC %s" % [sp_name, n_neg, n_pos, val])
 
+			CircuitComponent.Type.POTENTIOMETER:
+				var t1_id = comp.id + ":t1"
+				var w_id = comp.id + ":wiper"
+				var t2_id = comp.id + ":t2"
+				var nt1 = result.node_map.get(t1_id, "N_NC")
+				var nw = result.node_map.get(w_id, "N_NC")
+				var nt2 = result.node_map.get(t2_id, "N_NC")
+				var val = _format_spice_value(comp.value)
+				lines.append("%s %s %s %s POT %s" % [sp_name, nt1, nw, nt2, val])
+
+			CircuitComponent.Type.TRANSFORMER:
+				var pp_id = comp.id + ":pri_pos"
+				var pn_id = comp.id + ":pri_neg"
+				var sp_id = comp.id + ":sec_pos"
+				var sn_id = comp.id + ":sec_neg"
+				var npp = result.node_map.get(pp_id, "N_NC")
+				var npn = result.node_map.get(pn_id, "N_NC")
+				var nsp = result.node_map.get(sp_id, "N_NC")
+				var nsn = result.node_map.get(sn_id, "N_NC")
+				lines.append("%s %s %s %s %s XFMR" % [sp_name, npp, npn, nsp, nsn])
+
+			CircuitComponent.Type.SCR:
+				var a_id = comp.id + ":anode"
+				var g_id = comp.id + ":gate"
+				var k_id = comp.id + ":cathode"
+				var na = result.node_map.get(a_id, "N_NC")
+				var ng = result.node_map.get(g_id, "N_NC")
+				var nk = result.node_map.get(k_id, "N_NC")
+				lines.append("%s %s %s %s %s" % [sp_name, na, ng, nk, comp.value])
+
+			CircuitComponent.Type.TRIAC:
+				var m2_id = comp.id + ":mt2"
+				var g_id = comp.id + ":gate"
+				var m1_id = comp.id + ":mt1"
+				var nm2 = result.node_map.get(m2_id, "N_NC")
+				var ng = result.node_map.get(g_id, "N_NC")
+				var nm1 = result.node_map.get(m1_id, "N_NC")
+				lines.append("%s %s %s %s %s" % [sp_name, nm2, ng, nm1, comp.value])
+
+			CircuitComponent.Type.IC:
+				var pin_nodes: PackedStringArray = PackedStringArray()
+				for pin in comp.pins:
+					var pin_id = pin.id
+					var p_node = result.node_map.get(pin_id, "N_NC")
+					pin_nodes.append(p_node)
+				var model_name = comp.ic_data.get("model", comp.value)
+				lines.append("%s %s %s" % [sp_name, " ".join(pin_nodes), model_name])
+
 			CircuitComponent.Type.GROUND:
 				var gnd_id = comp.id + ":gnd"
 				var n_gnd = result.node_map.get(gnd_id, "0")

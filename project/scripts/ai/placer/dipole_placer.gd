@@ -27,21 +27,21 @@ static func place_circuit(parse_result: NetlistParser.ParseResult) -> Dictionary
 	# 2. Node grid coordinates
 	var node_canvas: Dictionary = _calculate_node_canvas_positions(parse_result)
 
-	# 3. Separate transistors and active 2-terminal dipoles
-	var transistors: Array[NetlistParser.ParsedComponent] = []
+	# 3. Separate multi-terminal/IC devices and 2-terminal dipoles
+	var multi_terminal_components: Array[NetlistParser.ParsedComponent] = []
 	var dipole_components: Array[NetlistParser.ParsedComponent] = []
 
 	for c in parse_result.components:
 		if placed_components.has(c.id) and placed_components[c.id].is_virtual:
 			continue
-		if c.type == CircuitComponent.Type.BJT_NPN or c.type == CircuitComponent.Type.BJT_PNP:
-			transistors.append(c)
+		if _is_multi_terminal(c.type):
+			multi_terminal_components.append(c)
 		else:
 			dipole_components.append(c)
 
-	# 4. Place 3-terminal active devices (Transistors)
-	TransistorPlacer.place_transistors(
-		transistors,
+	# 4. Place 3+ terminal active/IC devices
+	TransistorPlacer.place_multi_terminal(
+		multi_terminal_components,
 		node_canvas,
 		placed_components,
 		node_to_pins
@@ -158,3 +158,13 @@ static func _get_pin_name(ctype: CircuitComponent.Type, is_from: bool) -> String
 static func _register_node_pin(dict: Dictionary, nid: String, pin_id: String) -> void:
 	if not dict.has(nid): dict[nid] = []
 	if not dict[nid].has(pin_id): dict[nid].append(pin_id)
+
+static func _is_multi_terminal(type: CircuitComponent.Type) -> bool:
+	match type:
+		CircuitComponent.Type.BJT_NPN, CircuitComponent.Type.BJT_PNP, \
+		CircuitComponent.Type.OPAMP, CircuitComponent.Type.POTENTIOMETER, \
+		CircuitComponent.Type.TRANSFORMER, CircuitComponent.Type.SCR, \
+		CircuitComponent.Type.TRIAC, CircuitComponent.Type.IC:
+			return true
+	return false
+

@@ -131,6 +131,81 @@ Rload 4 0 1k"""
 	out += "SPICE 5 Node Map: %s\n" % str(spice5.node_map)
 	out += "\n--- NETLIST 5 ---\n" + spice5.netlist_text + "\n"
 
+	out += "\n=== TEST 6: POTENTIOMETER / TRIMPOT ===\n"
+	var text_pot = """* positions
+N0 0,4 ; N1 0,0 ; N2 2,2
+V1 1 0 DC 5V
+XPOT1 1 2 0 POT 10k
+Rload 2 0 100k"""
+	var res6 = CircuitReconstructor.parse_and_build(text_pot)
+	out += "SUCCESS 6: %s\n" % str(res6.success)
+	for cid in res6.components:
+		var c: CircuitComponent = res6.components[cid]
+		out += "Comp [%s] Type: %s, Pos: %s, Val: %s, Pins: %d\n" % [c.id, c.type, str(c.position), c.value, c.pins.size()]
+	var spice6 = CircuitGraph.generate_ngspice_netlist("Circuit6_Pot", res6.components, res6.wires)
+	out += "SPICE 6 Netlist:\n" + spice6.netlist_text + "\n"
+
+	out += "\n=== TEST 7: VOLTAGE REGULATOR IC (LM7805) ===\n"
+	var text_reg = """* positions
+N0 0,4 ; N1 0,0 ; N2 4,0
+Vin 1 0 DC 12V
+Cin 1 0 0.33uF
+XREG1 1 0 2 LM7805
+Cout 2 0 0.1uF
+Rload 2 0 100"""
+	var res7 = CircuitReconstructor.parse_and_build(text_reg)
+	out += "SUCCESS 7: %s\n" % str(res7.success)
+	for cid in res7.components:
+		var c: CircuitComponent = res7.components[cid]
+		out += "Comp [%s] Type: %s, Pos: %s, Val: %s, Pins: %d\n" % [c.id, c.type, str(c.position), c.value, c.pins.size()]
+	var spice7 = CircuitGraph.generate_ngspice_netlist("Circuit7_Reg", res7.components, res7.wires)
+	out += "SPICE 7 Netlist:\n" + spice7.netlist_text + "\n"
+
+	out += "\n=== TEST 8: OPTOCOUPLER IC (PC817) ===\n"
+	var text_opto = """* positions
+N0 0,4 ; N1 0,0 ; N2 2,0 ; N3 4,0 ; N4 4,2
+V1 1 0 DC 5V
+Rin 1 2 330
+XOPTO1 2 0 0 3 PC817
+Rpull 3 4 10k
+V2 4 0 DC 12V"""
+	var res8 = CircuitReconstructor.parse_and_build(text_opto)
+	out += "SUCCESS 8: %s\n" % str(res8.success)
+	for cid in res8.components:
+		var c: CircuitComponent = res8.components[cid]
+		out += "Comp [%s] Type: %s, Pos: %s, Val: %s, Pins: %d\n" % [c.id, c.type, str(c.position), c.value, c.pins.size()]
+	var spice8 = CircuitGraph.generate_ngspice_netlist("Circuit8_Opto", res8.components, res8.wires)
+	out += "SPICE 8 Netlist:\n" + spice8.netlist_text + "\n"
+
+	out += "\n=== TEST 9: TRANSFORMER & THYRISTOR (SCR) ===\n"
+	var text_pwr = """* positions
+N0 0,4 ; N1 0,0 ; N2 2,0 ; N3 4,0 ; N4 2,2
+Vac 1 0 AC 120
+XTR1 1 0 2 0 XFMR 10:1
+XSCR1 2 4 3 2N5064
+Rgate 2 4 1k
+Rload 3 0 10"""
+	var res9 = CircuitReconstructor.parse_and_build(text_pwr)
+	out += "SUCCESS 9: %s\n" % str(res9.success)
+	for cid in res9.components:
+		var c: CircuitComponent = res9.components[cid]
+		out += "Comp [%s] Type: %s, Pos: %s, Val: %s, Pins: %d\n" % [c.id, c.type, str(c.position), c.value, c.pins.size()]
+	var spice9 = CircuitGraph.generate_ngspice_netlist("Circuit9_Power", res9.components, res9.wires)
+	out += "SPICE 9 Netlist:\n" + spice9.netlist_text + "\n"
+
+	out += "\n=== TEST 10: 8-PIN GENERAL IC (NE555) ===\n"
+	var text_555 = """* positions
+N0 0,4 ; N1 0,0 ; N2 2,1 ; N3 2,2 ; N4 2,3
+Vcc 1 0 DC 9V
+U1 0 2 3 1 0 2 2 1 NE555"""
+	var res10 = CircuitReconstructor.parse_and_build(text_555)
+	out += "SUCCESS 10: %s\n" % str(res10.success)
+	for cid in res10.components:
+		var c: CircuitComponent = res10.components[cid]
+		out += "Comp [%s] Type: %s, Pos: %s, Val: %s, Pins: %d, Box: %s\n" % [c.id, c.type, str(c.position), c.value, c.pins.size(), str(c.ic_box_size)]
+	var spice10 = CircuitGraph.generate_ngspice_netlist("Circuit10_NE555", res10.components, res10.wires)
+	out += "SPICE 10 Netlist:\n" + spice10.netlist_text + "\n"
+
 	print(out)
 	var f = FileAccess.open("res://test_output.txt", FileAccess.WRITE)
 	if f:

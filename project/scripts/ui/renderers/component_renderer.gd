@@ -22,7 +22,11 @@ static func draw_component(canvas: CanvasItem, comp: CircuitComponent, is_select
 
 	# Selection highlight
 	if is_selected and comp.type != CircuitComponent.Type.JUNCTION:
-		var bounds_size = Vector2(90, 60) if comp.type == CircuitComponent.Type.RESISTOR else Vector2(70, 90)
+		var bounds_size = Vector2(70, 90)
+		if comp.type == CircuitComponent.Type.IC:
+			bounds_size = comp.ic_box_size + Vector2(24, 24)
+		elif comp.type == CircuitComponent.Type.RESISTOR or comp.type == CircuitComponent.Type.POTENTIOMETER:
+			bounds_size = Vector2(90, 60)
 		var sel_rect = Rect2(comp.position - bounds_size / 2.0, bounds_size)
 		canvas.draw_rect(sel_rect, Color(0.2, 0.65, 1.0, 0.12), true)
 		canvas.draw_rect(sel_rect, Color(0.2, 0.65, 1.0, 0.7), false, 1.5)
@@ -35,6 +39,8 @@ static func draw_component(canvas: CanvasItem, comp: CircuitComponent, is_select
 			PassiveRenderer.draw_capacitor(canvas, tf, color)
 		CircuitComponent.Type.INDUCTOR:
 			PassiveRenderer.draw_inductor(canvas, tf, color)
+		CircuitComponent.Type.POTENTIOMETER:
+			PassiveRenderer.draw_potentiometer(canvas, tf, color)
 		CircuitComponent.Type.VOLTAGE_SOURCE:
 			ActiveRenderer.draw_voltage_source(canvas, tf, color)
 		CircuitComponent.Type.CURRENT_SOURCE:
@@ -47,6 +53,14 @@ static func draw_component(canvas: CanvasItem, comp: CircuitComponent, is_select
 			ActiveRenderer.draw_bjt_pnp(canvas, tf, color)
 		CircuitComponent.Type.OPAMP:
 			ActiveRenderer.draw_opamp(canvas, tf, color)
+		CircuitComponent.Type.TRANSFORMER:
+			ActiveRenderer.draw_transformer(canvas, tf, color)
+		CircuitComponent.Type.SCR:
+			ActiveRenderer.draw_scr(canvas, tf, color)
+		CircuitComponent.Type.TRIAC:
+			ActiveRenderer.draw_triac(canvas, tf, color)
+		CircuitComponent.Type.IC:
+			ActiveRenderer.draw_ic(canvas, tf, comp, color, font)
 		CircuitComponent.Type.GROUND:
 			LabelRenderer.draw_ground(canvas, tf, color)
 		CircuitComponent.Type.NET_LABEL:
@@ -70,12 +84,20 @@ static func draw_component(canvas: CanvasItem, comp: CircuitComponent, is_select
 static func _draw_labels(canvas: CanvasItem, comp: CircuitComponent, font: Font) -> void:
 	if comp.type == CircuitComponent.Type.GROUND or comp.type == CircuitComponent.Type.NET_LABEL or comp.type == CircuitComponent.Type.JUNCTION:
 		return
+
+	var used_font = font if font else ThemeDB.fallback_font
+
+	if comp.type == CircuitComponent.Type.IC:
+		var offset_ic_id = Vector2(-comp.ic_box_size.x / 2.0, -comp.ic_box_size.y / 2.0 - 8.0)
+		canvas.draw_string(used_font, comp.position + offset_ic_id, comp.id, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COLOR_TEXT)
+		return
+
 	var offset_id = Vector2(-25, -28)
 	var offset_val = Vector2(-25, 34)
 	if comp.rotation_deg == 90 or comp.rotation_deg == 270:
 		offset_id = Vector2(28, -8)
 		offset_val = Vector2(28, 12)
 
-	var used_font = font if font else ThemeDB.fallback_font
 	canvas.draw_string(used_font, comp.position + offset_id, comp.id, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COLOR_TEXT)
 	canvas.draw_string(used_font, comp.position + offset_val, comp.value, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, COLOR_TEXT_VALUE)
+

@@ -38,9 +38,9 @@ func analyze_image(image_path: String) -> void:
 	var base64_data = Marshalls.raw_to_base64(bytes)
 
 	# =========================================================================
-	# PROMPT: SPICE Netlist + Coordenadas Relativas de Nodos para Dipolos
+	# PROMPT: SPICE Netlist + Coordenadas Relativas de Nodos para Esquemáticos EDA
 	# =========================================================================
-	var prompt_text = """Eres un sistema experto en análisis de esquemáticos electrónicos y generación de Netlists SPICE (ngspice) para componentes de dos terminales.
+	var prompt_text = """Eres un sistema experto en análisis de esquemáticos electrónicos y generación de Netlists SPICE (ngspice) para componentes discretos y circuitos integrados (ICs).
 
 Tu tarea es analizar la imagen del circuito, identificar la topología eléctrica real y generar EXCLUSIVAMENTE el bloque de posiciones relativas y el Netlist SPICE.
 
@@ -49,7 +49,7 @@ Tu tarea es analizar la imagen del circuito, identificar la topología eléctric
 1. TOPOLOGÍA, NODOS Y NETLABELS:
    - Todo cable conductor continuo representa UN SOLO NODO ELÉCTRICO.
    - El nodo de referencia o tierra común es SIEMPRE el nodo 0 (N0 / GND).
-   - Soporte de NetLabels: Para rieles de alimentación o conexiones por etiqueta (+5V, +3V, -5V, VCC), usa el nombre explícito como nodo o añade una directiva:
+   - Soporte de NetLabels: Para rieles de alimentación o etiquetas (+5V, +12V, -12V, VCC, VDD), usa el nombre explícito o añade una directiva:
      * label <nodo> <nombre_etiqueta> (ej: * label N1 +5V)
    - Numera los demás nodos de forma compacta y continua: 1, 2, 3...
 
@@ -59,16 +59,31 @@ Tu tarea es analizar la imagen del circuito, identificar la topología eléctric
      * positions
      N0 x0,y0 ; N1 x1,y1 ; N2 x2,y2 ; ...
 
-3. CONVENCIÓN DE POLARIDAD EN COMPONENTES (ngspice):
-   - Fuentes de Tensión: V<id> <nodo_+> <nodo_-> DC <valor>
-     * El primer nodo DEBE ser el terminal con el signo (+) o barra larga.
-     * El segundo nodo DEBE ser el terminal con el signo (-) o barra corta.
+3. COMPONENTES DISCRETOS DE 2 TERMINALES:
+   - Resistores: R<id> <nodoA> <nodoB> <valor> (ej: R1 1 2 10k)
+   - Capacitores: C<id> <nodoA> <nodoB> <valor> (ej: C1 2 0 100uF)
+   - Inductores: L<id> <nodoA> <nodoB> <valor> (ej: L1 1 2 10mH)
+   - Diodos: D<id> <nodo_anodo> <nodo_catodo> <modelo> (ej: D1 1 2 1N4148)
+   - Fuentes de Tensión: V<id> <nodo_+> <nodo_-> DC <valor> (ej: V1 1 0 DC 12)
    - Fuentes de Corriente: I<id> <nodo_origen> <nodo_destino> DC <valor>
-     * La corriente sale de <nodo_origen> y entra en <nodo_destino> (la flecha del símbolo apunta HACIA <nodo_destino>).
-   - Resistores: R<id> <nodoA> <nodoB> <valor> (valor en ohms, ej: 2, 5k, 1MEG).
-   - Capacitores e Inductores: C<id> <nodoA> <nodoB> <valor>, L<id> <nodoA> <nodoB> <valor>.
 
-4. SALIDA:
+4. DISPOSITIVOS DISCRETOS MULTI-TERMINAL:
+   - Transistor BJT: Q<id> <colector> <base> <emisor> <NPN|PNP|modelo> (ej: Q1 2 1 0 2N2222)
+   - Potenciómetro / Trimpot: XPOT<id> <terminal_1> <cursor/wiper> <terminal_2> POT <valor> (ej: XPOT1 1 2 0 POT 10k)
+   - Transformador: XTR<id> <pri_+> <pri_-> <sec_+> <sec_-> XFMR <relacion> (ej: XTR1 1 2 3 4 XFMR 1:1)
+   - Tiristor SCR: XSCR<id> <anodo> <gate> <catodo> <modelo> (ej: XSCR1 1 2 0 2N5064)
+   - TRIAC: XTRIAC<id> <mt2> <gate> <mt1> <modelo> (ej: XTRIAC1 1 2 0 BT136)
+   - Amplificador Operacional: XOP<id> <in_+> <in_-> <out> <modelo> (ej: XOP1 2 1 3 LM741)
+
+5. CIRCUITOS INTEGRADOS (ICs) Y SUBCIRCUITOS (X / U):
+   - Reguladores Lineales (78xx / LM317): XREG<id> <in> <gnd_adj> <out> <modelo> (ej: XREG1 1 0 2 LM7805)
+   - Optoacopladores: XOPTO<id> <anodo> <catodo> <emisor> <colector> <modelo> (ej: XOPTO1 1 2 0 3 PC817)
+   - Sensores Analógicos (LM35/TMP36): XSENS<id> <vcc> <gnd> <vout> <modelo> (ej: XSENS1 1 0 2 LM35)
+   - Referencia de Tensión (TL431): XREF<id> <catodo> <anodo> <ref> TL431 (ej: XREF1 1 0 2 TL431)
+   - Switches Analógicos / Mux (CD4066, CD4051): XSW<id> <in> <out> <ctrl> CD4066
+   - ICs Generales: U<id> <pin1> <pin2> ... <pinN> <CHIP_MODEL> (ej: U1 1 2 3 4 5 6 7 8 NE555)
+
+6. SALIDA:
    - Responde únicamente con el código SPICE y comentarios explicativos breves con (*). No incluyas bloques de conversación ni explicaciones fuera del netlist.
 """
 

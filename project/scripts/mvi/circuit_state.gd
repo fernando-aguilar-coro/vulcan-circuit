@@ -110,7 +110,11 @@ func find_components_in_rect(rect: Rect2) -> Array:
 		var comp: CircuitComponent = components[comp_id]
 		if comp.is_virtual:
 			continue
-		var bounds_size = Vector2(90, 60) if comp.type == CircuitComponent.Type.RESISTOR else Vector2(70, 90)
+		var bounds_size = Vector2(70, 90)
+		if comp.type == CircuitComponent.Type.IC:
+			bounds_size = comp.ic_box_size + Vector2(24, 24)
+		elif comp.type == CircuitComponent.Type.RESISTOR or comp.type == CircuitComponent.Type.POTENTIOMETER:
+			bounds_size = Vector2(90, 60)
 		var comp_rect = Rect2(comp.position - bounds_size / 2.0, bounds_size)
 		if rect.encloses(comp_rect) or rect.intersects(comp_rect) or rect.has_point(comp.position):
 			found.append(comp_id)
