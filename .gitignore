@@ -50,5 +50,3 @@ compile_commands.json
 cmake-build*
 CMakeUserPresets.json
 
-# Ignorar cache autogenerado de Godot en project
-project/.godot/
