@@ -2,3 +2,6 @@
 	path = godot-cpp
 	url = https://github.com/godotengine/godot-cpp.git
 	branch = 4.3
+[submodule "project"]
+	path = project
+	url = https://github.com/fernando-aguilar-coro/vulcan-circuit-godot.git
