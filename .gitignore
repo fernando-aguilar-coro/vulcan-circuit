@@ -49,6 +49,5 @@ compile_commands.json
 # Cmake
 cmake-build*
 CMakeUserPresets.json
-# Project (separate repository)
-/project/
+/proyect/
 
