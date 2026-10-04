@@ -26,12 +26,19 @@ jobs:
 
     runs-on: windows-latest
     steps:
-      # Shallow clone with submodules for fast checkout
+      # Checkout without submodules
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
           fetch-depth: 1
+
+      # Clone only godot-cpp submodule
+      - name: Checkout godot-cpp
+        shell: pwsh
+        run: |
+          git submodule update --init --recursive --depth 1 godot-cpp
+
 
       # Initialize MSVC environment for fast multi-threaded compilation
       - name: Setup MSVC
@@ -119,6 +126,4 @@ jobs:
         with:
           name: godot-gdextension-windows-${{ matrix.target-type }}
           retention-days: 14
-          path: |
-            project/bin/windows/
-            project/bin/example.gdextension
+          path: project/bin/windows/
