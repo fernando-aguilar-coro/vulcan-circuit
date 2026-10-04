@@ -28,7 +28,11 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 	Dictionary routes;
 
 	int routing_mode = p_circuit_graph.get("routing_mode", (int)ROUTING_ORTHOGONAL);
-	double segment_penalty = p_circuit_graph.get("segment_penalty", 50.0);
+	double segment_penalty = p_circuit_graph.get("segment_penalty", 150.0);
+	double crossing_penalty = p_circuit_graph.get("crossing_penalty", 120.0);
+	double port_direction_penalty = p_circuit_graph.get("port_direction_penalty", 100.0);
+	double reverse_direction_penalty = p_circuit_graph.get("reverse_direction_penalty", 50.0);
+	double port_pin_offset = p_circuit_graph.get("port_pin_offset", 16.0);
 	double nudging_distance = p_circuit_graph.get("nudging_distance", 12.0);
 	double shape_buffer_distance = p_circuit_graph.get("shape_buffer_distance", 10.0);
 	bool nudge_connected_to_shapes = p_circuit_graph.get("nudge_connected_to_shapes", true);
@@ -38,6 +42,9 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 
 	if (flags & Avoid::OrthogonalRouting) {
 		router.setRoutingParameter(Avoid::segmentPenalty, segment_penalty);
+		router.setRoutingParameter(Avoid::crossingPenalty, crossing_penalty);
+		router.setRoutingParameter(Avoid::portDirectionPenalty, port_direction_penalty);
+		router.setRoutingParameter(Avoid::reverseDirectionPenalty, reverse_direction_penalty);
 		router.setRoutingParameter(Avoid::idealNudgingDistance, nudging_distance);
 		router.setRoutingParameter(Avoid::shapeBufferDistance, shape_buffer_distance);
 		router.setRoutingOption(Avoid::nudgeOrthogonalSegmentsConnectedToShapes, nudge_connected_to_shapes);
@@ -97,7 +104,7 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 			rel_x = std::max(0.0, std::min(1.0, rel_x));
 			rel_y = std::max(0.0, std::min(1.0, rel_y));
 
-			new Avoid::ShapeConnectionPin(shape_ref, pin_id, rel_x, rel_y, true, 0.0, dir_flags);
+			new Avoid::ShapeConnectionPin(shape_ref, pin_id, rel_x, rel_y, true, port_pin_offset, dir_flags);
 		}
 	}
 
