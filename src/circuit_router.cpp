@@ -35,6 +35,7 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 	double port_pin_offset = p_circuit_graph.get("port_pin_offset", 16.0);
 	double nudging_distance = p_circuit_graph.get("nudging_distance", 12.0);
 	double shape_buffer_distance = p_circuit_graph.get("shape_buffer_distance", 10.0);
+	double fixed_shared_path_penalty = p_circuit_graph.get("fixed_shared_path_penalty", 250.0);
 	bool nudge_connected_to_shapes = p_circuit_graph.get("nudge_connected_to_shapes", true);
 
 	unsigned int flags = (routing_mode == ROUTING_POLYLINE) ? Avoid::PolyLineRouting : Avoid::OrthogonalRouting;
@@ -47,9 +48,12 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 		router.setRoutingParameter(Avoid::reverseDirectionPenalty, reverse_direction_penalty);
 		router.setRoutingParameter(Avoid::idealNudgingDistance, nudging_distance);
 		router.setRoutingParameter(Avoid::shapeBufferDistance, shape_buffer_distance);
+		router.setRoutingParameter(Avoid::fixedSharedPathPenalty, fixed_shared_path_penalty);
 		router.setRoutingOption(Avoid::nudgeOrthogonalSegmentsConnectedToShapes, nudge_connected_to_shapes);
 		router.setRoutingOption(Avoid::performUnifyingNudgingPreprocessingStep, true);
 		router.setRoutingOption(Avoid::nudgeOrthogonalTouchingColinearSegments, true);
+		router.setRoutingOption(Avoid::penaliseOrthogonalSharedPathsAtConnEnds, true);
+		router.setRoutingOption(Avoid::nudgeSharedPathsWithCommonEndPoint, true);
 	}
 
 	// 1. Process Obstacles (Components / Chips)
