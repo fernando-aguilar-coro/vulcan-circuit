@@ -32,9 +32,9 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 	double crossing_penalty = p_circuit_graph.get("crossing_penalty", 120.0);
 	double port_direction_penalty = p_circuit_graph.get("port_direction_penalty", 100.0);
 	double reverse_direction_penalty = p_circuit_graph.get("reverse_direction_penalty", 50.0);
-	double port_pin_offset = p_circuit_graph.get("port_pin_offset", 16.0);
-	double nudging_distance = p_circuit_graph.get("nudging_distance", 12.0);
-	double shape_buffer_distance = p_circuit_graph.get("shape_buffer_distance", 10.0);
+	double port_pin_offset = p_circuit_graph.get("port_pin_offset", 20.0);
+	double nudging_distance = p_circuit_graph.get("nudging_distance", 20.0);
+	double shape_buffer_distance = p_circuit_graph.get("shape_buffer_distance", 20.0);
 	double fixed_shared_path_penalty = p_circuit_graph.get("fixed_shared_path_penalty", 250.0);
 	bool nudge_connected_to_shapes = p_circuit_graph.get("nudge_connected_to_shapes", true);
 
@@ -81,34 +81,21 @@ Dictionary CircuitRouter::route_circuit(const Dictionary &p_circuit_graph) {
 			int pin_id = pin.get("id", p + 1);
 			int dir_flags = pin.get("dir", (int)DIR_ALL);
 
-			double rel_x = 0.5;
-			double rel_y = 0.5;
-
 			if (pin.has("pos")) {
 				Vector2 pos = pin.get("pos", Vector2());
-				if (rect.size.x > 0.0f) {
-					rel_x = (pos.x - rect.position.x) / rect.size.x;
-				}
-				if (rect.size.y > 0.0f) {
-					rel_y = (pos.y - rect.position.y) / rect.size.y;
-				}
+				double x_offset = pos.x - rect.position.x;
+				double y_offset = pos.y - rect.position.y;
+				new Avoid::ShapeConnectionPin(shape_ref, pin_id, x_offset, y_offset, false, 0.0, dir_flags);
 			} else if (pin.has("offset")) {
 				Vector2 offset = pin.get("offset", Vector2());
-				if (rect.size.x > 0.0f) {
-					rel_x = offset.x / rect.size.x;
-				}
-				if (rect.size.y > 0.0f) {
-					rel_y = offset.y / rect.size.y;
-				}
-			} else if (pin.has("rel_x") && pin.has("rel_y")) {
-				rel_x = pin.get("rel_x", 0.5);
-				rel_y = pin.get("rel_y", 0.5);
+				new Avoid::ShapeConnectionPin(shape_ref, pin_id, offset.x, offset.y, false, 0.0, dir_flags);
+			} else {
+				double rel_x = pin.get("rel_x", 0.5);
+				double rel_y = pin.get("rel_y", 0.5);
+				rel_x = std::max(0.0, std::min(1.0, rel_x));
+				rel_y = std::max(0.0, std::min(1.0, rel_y));
+				new Avoid::ShapeConnectionPin(shape_ref, pin_id, rel_x, rel_y, true, 0.0, dir_flags);
 			}
-
-			rel_x = std::max(0.0, std::min(1.0, rel_x));
-			rel_y = std::max(0.0, std::min(1.0, rel_y));
-
-			new Avoid::ShapeConnectionPin(shape_ref, pin_id, rel_x, rel_y, true, port_pin_offset, dir_flags);
 		}
 	}
 
