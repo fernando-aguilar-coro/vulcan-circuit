@@ -47,6 +47,15 @@ public:
 	Dictionary execute_command(const String &p_cmd);
 	String get_last_log() const;
 	void append_log(const char *msg);
+
+	// --- Enhanced GDExtension Live Simulation & Multicomponent Telemetry ---
+	bool start_live_sim(const String &p_netlist_text);
+	bool stop_live_sim();
+	bool is_sim_running() const;
+	bool alter_component_value(const String &p_device_id, const String &p_param_val);
+	Dictionary get_live_vector_snapshot();
+	Dictionary evaluate_component_telemetry(int p_type, const String &p_id, const String &p_val, const Dictionary &p_nodes, const Dictionary &p_voltages, const Dictionary &p_currents);
+	PackedVector2Array compute_current_particles(const PackedVector2Array &p_wire_pts, double p_current_amps, double p_accum_time, double p_spacing = 24.0);
 };
 
 } // namespace godot
