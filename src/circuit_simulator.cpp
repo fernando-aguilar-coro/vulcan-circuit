@@ -255,6 +255,11 @@ Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
 						} else if (name_str.begins_with("i(") && name_str.ends_with(")")) {
 							String branch_name = name_str.substr(2, name_str.length() - 3);
 							branch_currents[branch_name] = val;
+						} else if (name_str.ends_with("#branch")) {
+							branch_currents[name_str] = val;
+						} else if (!name_str.contains("#") && name_str != "time") {
+							// Raw node name in SPICE OP analysis (e.g. "n1", "n2", "out")
+							node_voltages[name_str] = val;
 						}
 					} else {
 						PackedFloat64Array arr;
@@ -273,6 +278,11 @@ Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
 	result["branch_currents"] = branch_currents;
 	result["all_vectors"] = all_vectors;
 	result["log"] = get_last_log();
+
+	Dictionary snap;
+	snap["node_voltages"] = node_voltages;
+	snap["branch_currents"] = branch_currents;
+	m_last_snapshot = snap;
 	return result;
 }
 
@@ -301,15 +311,15 @@ bool CircuitSimulator::start_live_sim(const String &p_netlist_text) {
 		if (!init_simulator("")) return false;
 	}
 
-	// First load circuit netlist deck
-	simulate_netlist(p_netlist_text);
+	// First load circuit netlist deck and calculate operating point / state
+	Dictionary sim_res = simulate_netlist(p_netlist_text);
 
 	auto cmd_fn = (int (*)(char*))p_ngSpice_Command;
 	if (!cmd_fn) return false;
 
-	// Launch background run or continuous transient
-	int ret = cmd_fn((char*)"bg_run");
-	return (ret == 0);
+	// Launch background run or continuous transient if applicable
+	cmd_fn((char*)"bg_run");
+	return sim_res.get("success", false);
 }
 
 bool CircuitSimulator::stop_live_sim() {
@@ -368,14 +378,26 @@ Dictionary CircuitSimulator::get_live_vector_snapshot() {
 					} else if (name_str.begins_with("i(") && name_str.ends_with(")")) {
 						String branch_name = name_str.substr(2, name_str.length() - 3);
 						branch_currents[branch_name] = val;
+					} else if (name_str.ends_with("#branch")) {
+						branch_currents[name_str] = val;
+					} else if (!name_str.contains("#") && name_str != "time") {
+						// Raw node name in SPICE OP/TRAN vectors (e.g. "n1", "n2", "out")
+						node_voltages[name_str] = val;
 					}
 				}
 			}
 		}
 	}
 
+	if (node_voltages.is_empty() && !m_last_snapshot.is_empty()) {
+		return m_last_snapshot;
+	}
+
 	result["node_voltages"] = node_voltages;
 	result["branch_currents"] = branch_currents;
+	if (!node_voltages.is_empty()) {
+		m_last_snapshot = result;
+	}
 	return result;
 }
 

@@ -25,6 +25,7 @@ private:
 	void *m_dll_handle = nullptr;
 	std::string m_last_log;
 	bool m_is_initialized = false;
+	Dictionary m_last_snapshot;
 	Ref<SpiceLibraryResolver> m_library_resolver;
 
 	// Function pointers to ngspice shared library
