@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cstring>
 #include <string>
+#include <algorithm>
 
 #if defined(_WIN32) || defined(_WIN64)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -56,6 +57,7 @@ void CircuitSimulator::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_sim_running"), &CircuitSimulator::is_sim_running);
 	ClassDB::bind_method(D_METHOD("alter_component_value", "device_id", "param_val"), &CircuitSimulator::alter_component_value);
 	ClassDB::bind_method(D_METHOD("get_live_vector_snapshot"), &CircuitSimulator::get_live_vector_snapshot);
+	ClassDB::bind_method(D_METHOD("evaluate_component_telemetry", "type", "id", "val", "nodes", "voltages", "currents"), &CircuitSimulator::evaluate_component_telemetry);
 	ClassDB::bind_method(D_METHOD("compute_current_particles", "wire_pts", "current_amps", "accum_time", "spacing"), &CircuitSimulator::compute_current_particles, DEFVAL(24.0));
 
 	ClassDB::bind_method(D_METHOD("scan_library_file", "file_path"), &CircuitSimulator::scan_library_file);
@@ -398,8 +400,8 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 	// 7: BJT_NPN, 8: BJT_PNP, 9: OPAMP, 10: POTENTIOMETER
 	// 21+: GATE_AND, GATE_OR, GATE_NOT, GATE_NAND, GATE_NOR, GATE_XOR
 	if (p_type == 0) { // RESISTOR
-		String n1 = p_nodes.get(p_id + ":p1", "0");
-		String n2 = p_nodes.get(p_id + ":p2", "0");
+		String n1 = p_nodes.get(p_id + String(":p1"), "0");
+		String n2 = p_nodes.get(p_id + String(":p2"), "0");
 		double v1 = helper_get_voltage(p_voltages, n1);
 		double v2 = helper_get_voltage(p_voltages, n2);
 		double v_drop = std::abs(v1 - v2);
@@ -424,15 +426,15 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		telem["state_str"] = "Normal";
 	}
 	else if (p_type == 1) { // VOLTAGE_SOURCE
-		String n_pos = p_nodes.get(p_id + ":pos", "0");
-		String n_neg = p_nodes.get(p_id + ":neg", "0");
+		String n_pos = p_nodes.get(p_id + String(":pos"), "0");
+		String n_neg = p_nodes.get(p_id + String(":neg"), "0");
 		double v_pos = helper_get_voltage(p_voltages, n_pos);
 		double v_neg = helper_get_voltage(p_voltages, n_neg);
 		double v_src = v_pos - v_neg;
-		String b_name = p_id.to_lower() + "#branch";
+		String b_name = p_id.to_lower() + String("#branch");
 		double curr = 0.0;
 		if (p_currents.has(b_name)) curr = std::abs((double)p_currents[b_name]);
-		else if (p_currents.has(p_id + "#branch")) curr = std::abs((double)p_currents[p_id + "#branch"]);
+		else if (p_currents.has(p_id + String("#branch"))) curr = std::abs((double)p_currents[p_id + String("#branch")]);
 
 		telem["v_drop"] = v_src;
 		telem["current"] = curr;
@@ -440,8 +442,8 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		telem["state_str"] = "Active Source";
 	}
 	else if (p_type == 6) { // DIODE
-		String n_a = p_nodes.get(p_id + ":anode", "0");
-		String n_k = p_nodes.get(p_id + ":cathode", "0");
+		String n_a = p_nodes.get(p_id + String(":anode"), "0");
+		String n_k = p_nodes.get(p_id + String(":cathode"), "0");
 		double v_a = helper_get_voltage(p_voltages, n_a);
 		double v_k = helper_get_voltage(p_voltages, n_k);
 		double v_d = v_a - v_k;
@@ -458,9 +460,9 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		}
 	}
 	else if (p_type == 7 || p_type == 8) { // BJT_NPN / BJT_PNP
-		String n_c = p_nodes.get(p_id + ":C", "0");
-		String n_b = p_nodes.get(p_id + ":B", "0");
-		String n_e = p_nodes.get(p_id + ":E", "0");
+		String n_c = p_nodes.get(p_id + String(":C"), "0");
+		String n_b = p_nodes.get(p_id + String(":B"), "0");
+		String n_e = p_nodes.get(p_id + String(":E"), "0");
 		double vc = helper_get_voltage(p_voltages, n_c);
 		double vb = helper_get_voltage(p_voltages, n_b);
 		double ve = helper_get_voltage(p_voltages, n_e);
@@ -488,7 +490,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		}
 	}
 	else { // Digital Gates or Default
-		String n_out = p_nodes.get(p_id + ":out", "0");
+		String n_out = p_nodes.get(p_id + String(":out"), "0");
 		double v_out = helper_get_voltage(p_voltages, n_out);
 		telem["v_drop"] = v_out;
 		telem["logic_state"] = (v_out > 1.65) ? "1" : "0";
@@ -604,39 +606,39 @@ Dictionary CircuitSimulator::get_device_internal_parameters(const String &p_devi
 
 	// 6: DIODE
 	if (p_type == 6) {
-		params["id"] = query_internal_vector("@" + dev + "[id]");
-		params["vd"] = query_internal_vector("@" + dev + "[vd]");
-		params["gd"] = query_internal_vector("@" + dev + "[gd]");
-		params["cd"] = query_internal_vector("@" + dev + "[cd]");
-		params["p"] = query_internal_vector("@" + dev + "[p]");
+		params["id"] = query_internal_vector(String("@") + dev + String("[id]"));
+		params["vd"] = query_internal_vector(String("@") + dev + String("[vd]"));
+		params["gd"] = query_internal_vector(String("@") + dev + String("[gd]"));
+		params["cd"] = query_internal_vector(String("@") + dev + String("[cd]"));
+		params["p"] = query_internal_vector(String("@") + dev + String("[p]"));
 	}
 	// 7: BJT_NPN or 8: BJT_PNP
 	else if (p_type == 7 || p_type == 8) {
-		params["ib"] = query_internal_vector("@" + dev + "[ib]");
-		params["ic"] = query_internal_vector("@" + dev + "[ic]");
-		params["ie"] = query_internal_vector("@" + dev + "[ie]");
-		params["vbe"] = query_internal_vector("@" + dev + "[vbe]");
-		params["vce"] = query_internal_vector("@" + dev + "[vce]");
-		params["gm"] = query_internal_vector("@" + dev + "[gm]");
-		params["gpi"] = query_internal_vector("@" + dev + "[gpi]");
-		params["go"] = query_internal_vector("@" + dev + "[go]");
-		params["cpi"] = query_internal_vector("@" + dev + "[cpi]");
-		params["cmu"] = query_internal_vector("@" + dev + "[cmu]");
-		params["cbx"] = query_internal_vector("@" + dev + "[cbx]");
-		params["p"] = query_internal_vector("@" + dev + "[p]");
+		params["ib"] = query_internal_vector(String("@") + dev + String("[ib]"));
+		params["ic"] = query_internal_vector(String("@") + dev + String("[ic]"));
+		params["ie"] = query_internal_vector(String("@") + dev + String("[ie]"));
+		params["vbe"] = query_internal_vector(String("@") + dev + String("[vbe]"));
+		params["vce"] = query_internal_vector(String("@") + dev + String("[vce]"));
+		params["gm"] = query_internal_vector(String("@") + dev + String("[gm]"));
+		params["gpi"] = query_internal_vector(String("@") + dev + String("[gpi]"));
+		params["go"] = query_internal_vector(String("@") + dev + String("[go]"));
+		params["cpi"] = query_internal_vector(String("@") + dev + String("[cpi]"));
+		params["cmu"] = query_internal_vector(String("@") + dev + String("[cmu]"));
+		params["cbx"] = query_internal_vector(String("@") + dev + String("[cbx]"));
+		params["p"] = query_internal_vector(String("@") + dev + String("[p]"));
 	}
 	// MOSFET (NMOS/PMOS) or generic device query
 	else {
-		double gm = query_internal_vector("@" + dev + "[gm]");
+		double gm = query_internal_vector(String("@") + dev + String("[gm]"));
 		if (std::abs(gm) > 1e-12) {
 			params["gm"] = gm;
-			params["gds"] = query_internal_vector("@" + dev + "[gds]");
-			params["id"] = query_internal_vector("@" + dev + "[id]");
-			params["vgs"] = query_internal_vector("@" + dev + "[vgs]");
-			params["vds"] = query_internal_vector("@" + dev + "[vds]");
-			params["cgs"] = query_internal_vector("@" + dev + "[cgs]");
-			params["cgd"] = query_internal_vector("@" + dev + "[cgd]");
-			params["p"] = query_internal_vector("@" + dev + "[p]");
+			params["gds"] = query_internal_vector(String("@") + dev + String("[gds]"));
+			params["id"] = query_internal_vector(String("@") + dev + String("[id]"));
+			params["vgs"] = query_internal_vector(String("@") + dev + String("[vgs]"));
+			params["vds"] = query_internal_vector(String("@") + dev + String("[vds]"));
+			params["cgs"] = query_internal_vector(String("@") + dev + String("[cgs]"));
+			params["cgd"] = query_internal_vector(String("@") + dev + String("[cgd]"));
+			params["p"] = query_internal_vector(String("@") + dev + String("[p]"));
 		}
 	}
 
