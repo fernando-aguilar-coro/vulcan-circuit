@@ -7,8 +7,11 @@
 #include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/packed_float64_array.hpp>
 
+#include "spice_library_resolver.h"
+
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace godot {
 
@@ -22,6 +25,7 @@ private:
 	void *m_dll_handle = nullptr;
 	std::string m_last_log;
 	bool m_is_initialized = false;
+	Ref<SpiceLibraryResolver> m_library_resolver;
 
 	// Function pointers to ngspice shared library
 	void *p_ngSpice_Init = nullptr;
@@ -56,6 +60,17 @@ public:
 	Dictionary get_live_vector_snapshot();
 	Dictionary evaluate_component_telemetry(int p_type, const String &p_id, const String &p_val, const Dictionary &p_nodes, const Dictionary &p_voltages, const Dictionary &p_currents);
 	PackedVector2Array compute_current_particles(const PackedVector2Array &p_wire_pts, double p_current_amps, double p_accum_time, double p_spacing = 24.0);
+
+	// --- SPICE Library & Subcircuit Management ---
+	bool scan_library_file(const String &p_file_path);
+	int scan_library_directory(const String &p_dir_path, bool p_recursive = true);
+	bool register_raw_library(const String &p_library_text, const String &p_source_name = "memory");
+	Dictionary get_library_catalog() const;
+	String resolve_subcircuits_and_models(const PackedStringArray &p_needed_names) const;
+
+	// --- Detailed Semiconductor Internal Vectors Extraction (@device[param]) ---
+	Dictionary get_device_internal_parameters(const String &p_device_id, int p_type);
+	double query_internal_vector(const String &p_query);
 };
 
 } // namespace godot

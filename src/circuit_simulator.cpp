@@ -56,11 +56,20 @@ void CircuitSimulator::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_sim_running"), &CircuitSimulator::is_sim_running);
 	ClassDB::bind_method(D_METHOD("alter_component_value", "device_id", "param_val"), &CircuitSimulator::alter_component_value);
 	ClassDB::bind_method(D_METHOD("get_live_vector_snapshot"), &CircuitSimulator::get_live_vector_snapshot);
-	ClassDB::bind_method(D_METHOD("evaluate_component_telemetry", "type", "id", "val", "nodes", "voltages", "currents"), &CircuitSimulator::evaluate_component_telemetry);
 	ClassDB::bind_method(D_METHOD("compute_current_particles", "wire_pts", "current_amps", "accum_time", "spacing"), &CircuitSimulator::compute_current_particles, DEFVAL(24.0));
+
+	ClassDB::bind_method(D_METHOD("scan_library_file", "file_path"), &CircuitSimulator::scan_library_file);
+	ClassDB::bind_method(D_METHOD("scan_library_directory", "dir_path", "recursive"), &CircuitSimulator::scan_library_directory, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("register_raw_library", "library_text", "source_name"), &CircuitSimulator::register_raw_library, DEFVAL("memory"));
+	ClassDB::bind_method(D_METHOD("get_library_catalog"), &CircuitSimulator::get_library_catalog);
+	ClassDB::bind_method(D_METHOD("resolve_subcircuits_and_models", "needed_names"), &CircuitSimulator::resolve_subcircuits_and_models);
+
+	ClassDB::bind_method(D_METHOD("get_device_internal_parameters", "device_id", "type"), &CircuitSimulator::get_device_internal_parameters);
+	ClassDB::bind_method(D_METHOD("query_internal_vector", "query"), &CircuitSimulator::query_internal_vector);
 }
 
 CircuitSimulator::CircuitSimulator() {
+	m_library_resolver.instantiate();
 	init_simulator("");
 }
 
@@ -439,6 +448,14 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		bool is_conducting = (v_d >= 0.65);
 		telem["v_drop"] = v_d;
 		telem["state_str"] = is_conducting ? "Conducting (ON)" : "Reverse Biased (OFF)";
+
+		// Internal small-signal and dynamic extraction
+		Dictionary internals = get_device_internal_parameters(p_id, p_type);
+		if (!internals.is_empty()) {
+			telem["internals"] = internals;
+			if (internals.has("id")) telem["current"] = std::abs((double)internals["id"]);
+			if (internals.has("p")) telem["power"] = std::abs((double)internals["p"]);
+		}
 	}
 	else if (p_type == 7 || p_type == 8) { // BJT_NPN / BJT_PNP
 		String n_c = p_nodes.get(p_id + ":C", "0");
@@ -460,6 +477,14 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 			if (-vbe < 0.6) telem["state_str"] = "Cutoff";
 			else if (-vce < 0.2) telem["state_str"] = "Saturation";
 			else telem["state_str"] = "Active Forward";
+		}
+
+		// Internal small-signal and dynamic extraction (gm, cpi, cmu, power)
+		Dictionary internals = get_device_internal_parameters(p_id, p_type);
+		if (!internals.is_empty()) {
+			telem["internals"] = internals;
+			if (internals.has("ic")) telem["current"] = std::abs((double)internals["ic"]);
+			if (internals.has("p")) telem["power"] = std::abs((double)internals["p"]);
 		}
 	}
 	else { // Digital Gates or Default
@@ -512,6 +537,110 @@ PackedVector2Array CircuitSimulator::compute_current_particles(const PackedVecto
 	}
 
 	return particles;
+}
+
+// --- SPICE Library & Subcircuit Management ---
+
+bool CircuitSimulator::scan_library_file(const String &p_file_path) {
+	if (m_library_resolver.is_valid()) {
+		return m_library_resolver->scan_file(p_file_path);
+	}
+	return false;
+}
+
+int CircuitSimulator::scan_library_directory(const String &p_dir_path, bool p_recursive) {
+	if (m_library_resolver.is_valid()) {
+		return m_library_resolver->scan_directory(p_dir_path, p_recursive);
+	}
+	return 0;
+}
+
+bool CircuitSimulator::register_raw_library(const String &p_library_text, const String &p_source_name) {
+	if (m_library_resolver.is_valid()) {
+		return m_library_resolver->register_raw_library(p_library_text, p_source_name);
+	}
+	return false;
+}
+
+Dictionary CircuitSimulator::get_library_catalog() const {
+	Dictionary catalog;
+	if (m_library_resolver.is_valid()) {
+		catalog["subcircuits"] = m_library_resolver->get_subcircuit_names();
+		catalog["models"] = m_library_resolver->get_model_names();
+	}
+	return catalog;
+}
+
+String CircuitSimulator::resolve_subcircuits_and_models(const PackedStringArray &p_needed_names) const {
+	if (m_library_resolver.is_valid()) {
+		return m_library_resolver->generate_injection_deck(p_needed_names);
+	}
+	return "";
+}
+
+// --- Detailed Semiconductor Internal Vectors Extraction (@device[param]) ---
+
+double CircuitSimulator::query_internal_vector(const String &p_query) {
+	if (!is_available() || !p_ngGet_Vec_Info) {
+		return 0.0;
+	}
+
+	auto vec_info_fn = (pvector_info (*)(char*))p_ngGet_Vec_Info;
+	std::string q_str = p_query.strip_edges().utf8().get_data();
+	pvector_info vinfo = vec_info_fn(&q_str[0]);
+	if (vinfo && vinfo->v_realdata && vinfo->v_length > 0) {
+		return vinfo->v_realdata[vinfo->v_length - 1]; // latest point
+	}
+	return 0.0;
+}
+
+Dictionary CircuitSimulator::get_device_internal_parameters(const String &p_device_id, int p_type) {
+	Dictionary params;
+	if (!is_available()) {
+		return params;
+	}
+
+	String dev = p_device_id.to_lower();
+
+	// 6: DIODE
+	if (p_type == 6) {
+		params["id"] = query_internal_vector("@" + dev + "[id]");
+		params["vd"] = query_internal_vector("@" + dev + "[vd]");
+		params["gd"] = query_internal_vector("@" + dev + "[gd]");
+		params["cd"] = query_internal_vector("@" + dev + "[cd]");
+		params["p"] = query_internal_vector("@" + dev + "[p]");
+	}
+	// 7: BJT_NPN or 8: BJT_PNP
+	else if (p_type == 7 || p_type == 8) {
+		params["ib"] = query_internal_vector("@" + dev + "[ib]");
+		params["ic"] = query_internal_vector("@" + dev + "[ic]");
+		params["ie"] = query_internal_vector("@" + dev + "[ie]");
+		params["vbe"] = query_internal_vector("@" + dev + "[vbe]");
+		params["vce"] = query_internal_vector("@" + dev + "[vce]");
+		params["gm"] = query_internal_vector("@" + dev + "[gm]");
+		params["gpi"] = query_internal_vector("@" + dev + "[gpi]");
+		params["go"] = query_internal_vector("@" + dev + "[go]");
+		params["cpi"] = query_internal_vector("@" + dev + "[cpi]");
+		params["cmu"] = query_internal_vector("@" + dev + "[cmu]");
+		params["cbx"] = query_internal_vector("@" + dev + "[cbx]");
+		params["p"] = query_internal_vector("@" + dev + "[p]");
+	}
+	// MOSFET (NMOS/PMOS) or generic device query
+	else {
+		double gm = query_internal_vector("@" + dev + "[gm]");
+		if (std::abs(gm) > 1e-12) {
+			params["gm"] = gm;
+			params["gds"] = query_internal_vector("@" + dev + "[gds]");
+			params["id"] = query_internal_vector("@" + dev + "[id]");
+			params["vgs"] = query_internal_vector("@" + dev + "[vgs]");
+			params["vds"] = query_internal_vector("@" + dev + "[vds]");
+			params["cgs"] = query_internal_vector("@" + dev + "[cgs]");
+			params["cgd"] = query_internal_vector("@" + dev + "[cgd]");
+			params["p"] = query_internal_vector("@" + dev + "[p]");
+		}
+	}
+
+	return params;
 }
 
 } // namespace godot

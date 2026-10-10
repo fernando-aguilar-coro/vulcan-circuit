@@ -50,3 +50,5 @@ compile_commands.json
 cmake-build*
 CMakeUserPresets.json
 
+# Antigravity
+.agents/

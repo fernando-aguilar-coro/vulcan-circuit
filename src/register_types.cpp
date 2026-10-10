@@ -9,6 +9,7 @@
 #include "circuit_router.h"
 #include "circuit_simulator.h"
 #include "circuit_placer.h"
+#include "spice_library_resolver.h"
 
 using namespace godot;
 
@@ -21,6 +22,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	GDREGISTER_CLASS(CircuitRouter);
 	GDREGISTER_CLASS(CircuitSimulator);
 	GDREGISTER_CLASS(CircuitPlacer);
+	GDREGISTER_CLASS(SpiceLibraryResolver);
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
