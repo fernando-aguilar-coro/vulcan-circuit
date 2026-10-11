@@ -422,8 +422,26 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 	// 7: BJT_NPN, 8: BJT_PNP, 9: OPAMP, 10: POTENTIOMETER
 	// 21+: GATE_AND, GATE_OR, GATE_NOT, GATE_NAND, GATE_NOR, GATE_XOR
 	if (p_type == 0) { // RESISTOR
-		String n1 = p_nodes.get(p_id + String(":p1"), "0");
-		String n2 = p_nodes.get(p_id + String(":p2"), "0");
+		String pin1_id = p_id + String(":p1");
+		String pin2_id = p_id + String(":p2");
+		if (!p_nodes.has(pin1_id) || !p_nodes.has(pin2_id)) {
+			telem["v_drop"] = 0.0;
+			telem["current"] = 0.0;
+			telem["power"] = 0.0;
+			telem["resistance"] = 1000.0;
+			telem["state_str"] = "Open Pin";
+			return telem;
+		}
+		String n1 = p_nodes[pin1_id];
+		String n2 = p_nodes[pin2_id];
+		if (n1 == n2) {
+			telem["v_drop"] = 0.0;
+			telem["current"] = 0.0;
+			telem["power"] = 0.0;
+			telem["resistance"] = 1000.0;
+			telem["state_str"] = "Equipotential / Short";
+			return telem;
+		}
 		double v1 = helper_get_voltage(p_voltages, n1);
 		double v2 = helper_get_voltage(p_voltages, n2);
 		double v_drop = std::abs(v1 - v2);
@@ -524,7 +542,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 
 PackedVector2Array CircuitSimulator::compute_current_particles(const PackedVector2Array &p_wire_pts, double p_current_amps, double p_accum_time, double p_spacing) {
 	PackedVector2Array particles;
-	if (p_wire_pts.size() < 2 || std::abs(p_current_amps) < 1e-9 || p_spacing <= 1.0) {
+	if (p_wire_pts.size() < 2 || std::abs(p_current_amps) < 1e-7 || p_spacing <= 1.0) {
 		return particles;
 	}
 
