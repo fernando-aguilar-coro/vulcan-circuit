@@ -44,19 +44,22 @@ def main():
         print(f"Error al descargar: {zip_response.status_code}")
         return
 
-    # Extraer los archivos mapeándolos a project/bin/
+    # Extraer los archivos sobrescribiéndolos en project/bin/windows/
+    target_dir = Path("project/bin/windows")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
     with zipfile.ZipFile(io.BytesIO(zip_response.content)) as zip_ref:
         for member in zip_ref.infolist():
             if member.is_dir():
                 continue
             
-            target_path = Path("project/bin") / member.filename
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            filename = Path(member.filename).name
+            target_path = target_dir / filename
             
             with zip_ref.open(member) as source, target_path.open("wb") as target:
                 target.write(source.read())
                 
-    print("¡Listo! Archivos descargados y extraídos correctamente en su sitio (project/bin/).")
+    print("¡Listo! Archivos descargados y extraídos correctamente en su sitio (project/bin/windows/).")
 
 if __name__ == "__main__":
     main()
