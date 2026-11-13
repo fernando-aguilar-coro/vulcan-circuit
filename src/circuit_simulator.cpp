@@ -417,11 +417,11 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 	telem["type"] = p_type;
 	telem["value"] = p_val;
 
-	// CircuitComponent.Type enum mapping:
-	// 0: RESISTOR, 1: VOLTAGE_SOURCE, 2: CURRENT_SOURCE, 3: GROUND, 4: CAPACITOR, 5: INDUCTOR, 6: DIODE
-	// 7: BJT_NPN, 8: BJT_PNP, 9: OPAMP, 10: POTENTIOMETER
-	// 21+: GATE_AND, GATE_OR, GATE_NOT, GATE_NAND, GATE_NOR, GATE_XOR
-	if (p_type == 0) { // RESISTOR
+	// Keep these values aligned with CircuitComponent.Type in circuit_component.gd.
+	// 0: UNKNOWN, 1: RESISTOR, 2: VOLTAGE_SOURCE, 3: CURRENT_SOURCE,
+	// 4: GROUND, 5: CAPACITOR, 6: INDUCTOR, 7: DIODE,
+	// 8: BJT_NPN, 9: BJT_PNP, 22+: digital component types.
+	if (p_type == 1) { // RESISTOR
 		String pin1_id = p_id + String(":p1");
 		String pin2_id = p_id + String(":p2");
 		if (!p_nodes.has(pin1_id) || !p_nodes.has(pin2_id)) {
@@ -465,7 +465,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		telem["resistance"] = r_val;
 		telem["state_str"] = "Normal";
 	}
-	else if (p_type == 1) { // VOLTAGE_SOURCE
+	else if (p_type == 2) { // VOLTAGE_SOURCE
 		String n_pos = p_nodes.get(p_id + String(":pos"), "0");
 		String n_neg = p_nodes.get(p_id + String(":neg"), "0");
 		double v_pos = helper_get_voltage(p_voltages, n_pos);
@@ -481,7 +481,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		telem["power"] = std::abs(v_src * curr);
 		telem["state_str"] = "Active Source";
 	}
-	else if (p_type == 6) { // DIODE
+	else if (p_type == 7) { // DIODE
 		String n_a = p_nodes.get(p_id + String(":anode"), "0");
 		String n_k = p_nodes.get(p_id + String(":cathode"), "0");
 		double v_a = helper_get_voltage(p_voltages, n_a);
@@ -499,7 +499,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 			if (internals.has("p")) telem["power"] = std::abs((double)internals["p"]);
 		}
 	}
-	else if (p_type == 7 || p_type == 8) { // BJT_NPN / BJT_PNP
+	else if (p_type == 8 || p_type == 9) { // BJT_NPN / BJT_PNP
 		String n_c = p_nodes.get(p_id + String(":C"), "0");
 		String n_b = p_nodes.get(p_id + String(":B"), "0");
 		String n_e = p_nodes.get(p_id + String(":E"), "0");
@@ -511,7 +511,7 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		double vce = vc - ve;
 		telem["v_be"] = vbe;
 		telem["v_ce"] = vce;
-		if (p_type == 7) { // NPN
+		if (p_type == 8) { // NPN
 			if (vbe < 0.6) telem["state_str"] = "Cutoff";
 			else if (vce < 0.2) telem["state_str"] = "Saturation";
 			else telem["state_str"] = "Active Forward";
@@ -644,16 +644,17 @@ Dictionary CircuitSimulator::get_device_internal_parameters(const String &p_devi
 
 	String dev = p_device_id.to_lower();
 
-	// 6: DIODE
-	if (p_type == 6) {
+	// Keep these values aligned with CircuitComponent.Type in circuit_component.gd.
+	// 7: DIODE
+	if (p_type == 7) {
 		params["id"] = query_internal_vector(String("@") + dev + String("[id]"));
 		params["vd"] = query_internal_vector(String("@") + dev + String("[vd]"));
 		params["gd"] = query_internal_vector(String("@") + dev + String("[gd]"));
 		params["cd"] = query_internal_vector(String("@") + dev + String("[cd]"));
 		params["p"] = query_internal_vector(String("@") + dev + String("[p]"));
 	}
-	// 7: BJT_NPN or 8: BJT_PNP
-	else if (p_type == 7 || p_type == 8) {
+	// 8: BJT_NPN or 9: BJT_PNP
+	else if (p_type == 8 || p_type == 9) {
 		params["ib"] = query_internal_vector(String("@") + dev + String("[ib]"));
 		params["ic"] = query_internal_vector(String("@") + dev + String("[ic]"));
 		params["ie"] = query_internal_vector(String("@") + dev + String("[ie]"));
