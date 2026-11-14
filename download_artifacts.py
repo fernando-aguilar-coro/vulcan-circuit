@@ -30,6 +30,7 @@ def main():
         return
 
     artifacts = response.json().get("artifacts", [])
+    print(f"Artifacts: {artifacts}")
     target_artifact = next((a for a in artifacts if a["name"] == ARTIFACT_NAME), None)
 
     if not target_artifact:

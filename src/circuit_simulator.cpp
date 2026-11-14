@@ -2,12 +2,15 @@
 #include "ngspice/sharedspice.h"
 
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/vector2.hpp>
 
 #include <sstream>
 #include <iostream>
 #include <cstring>
 #include <string>
 #include <algorithm>
+#include <cmath>
 
 #if defined(_WIN32) || defined(_WIN64)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -49,6 +52,7 @@ void CircuitSimulator::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("init_simulator", "dll_path"), &CircuitSimulator::init_simulator, DEFVAL(""));
 	ClassDB::bind_method(D_METHOD("is_available"), &CircuitSimulator::is_available);
 	ClassDB::bind_method(D_METHOD("simulate_netlist", "netlist_text"), &CircuitSimulator::simulate_netlist);
+	ClassDB::bind_method(D_METHOD("run_analysis", "netlist_text", "analysis_mode", "options"), &CircuitSimulator::run_analysis, DEFVAL(Dictionary()));
 	ClassDB::bind_method(D_METHOD("execute_command", "cmd"), &CircuitSimulator::execute_command);
 	ClassDB::bind_method(D_METHOD("get_last_log"), &CircuitSimulator::get_last_log);
 
@@ -181,6 +185,10 @@ bool CircuitSimulator::init_simulator(const String &p_dll_path) {
 }
 
 Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
+	return run_analysis(p_netlist_text, "op", Dictionary());
+}
+
+Dictionary CircuitSimulator::run_analysis(const String &p_netlist_text, const String &p_analysis_mode, const Dictionary &p_options) {
 	Dictionary result;
 	result["success"] = false;
 	m_last_log.clear();
@@ -191,6 +199,40 @@ Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
 			result["log"] = get_last_log();
 			return result;
 		}
+	}
+
+	String mode = p_analysis_mode.to_lower().strip_edges();
+	String command;
+	if (mode == "op") {
+		command = "op";
+	} else if (mode == "tran" || mode == "transient") {
+		double time_step = (double)p_options.get("time_step", 1e-5);
+		double stop_time = (double)p_options.get("stop_time", 0.01);
+		if (!std::isfinite(time_step) || !std::isfinite(stop_time) || time_step <= 0.0 || stop_time <= time_step) {
+			result["error"] = "Transient analysis requires finite positive time_step and stop_time > time_step.";
+			result["log"] = get_last_log();
+			return result;
+		}
+		command = "tran " + String::num_real(time_step) + " " + String::num_real(stop_time) + " 0 " + String::num_real(time_step);
+		mode = "tran";
+	} else if (mode == "ac" || mode == "phasor") {
+		double start_frequency = (double)p_options.get("start_frequency_hz", 10.0);
+		double stop_frequency = (double)p_options.get("stop_frequency_hz", 1e6);
+		int points_per_decade = (int)p_options.get("points_per_decade", 20);
+		if (!std::isfinite(start_frequency) || !std::isfinite(stop_frequency) ||
+				start_frequency <= 0.0 || stop_frequency <= start_frequency ||
+				points_per_decade < 1 || points_per_decade > 10000) {
+			result["error"] = "AC analysis requires 0 < start_frequency_hz < stop_frequency_hz and 1-10000 points per decade.";
+			result["log"] = get_last_log();
+			return result;
+		}
+		command = "ac dec " + String::num_int64(points_per_decade) + " " +
+				String::num_real(start_frequency) + " " + String::num_real(stop_frequency);
+		mode = "ac";
+	} else {
+		result["error"] = "Unsupported analysis mode: " + p_analysis_mode;
+		result["log"] = get_last_log();
+		return result;
 	}
 
 	// Split netlist into lines
@@ -229,13 +271,21 @@ Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
 		return result;
 	}
 
-	// Run Operating Point analysis by default
-	cmd_fn((char*)"op");
+	std::string command_str = command.utf8().get_data();
+	int analysis_ret = cmd_fn(&command_str[0]);
+	if (analysis_ret != 0) {
+		result["error"] = "ngspice failed to run " + mode.to_upper() + " analysis (code: " + String::num_int64(analysis_ret) + ").";
+		result["log"] = get_last_log();
+		return result;
+	}
 
 	char *cur_plot = cur_plot_fn();
 	Dictionary node_voltages;
 	Dictionary branch_currents;
 	Dictionary all_vectors;
+	Dictionary ac_voltages;
+	Dictionary ac_device_currents;
+	PackedFloat64Array ac_frequencies;
 
 	if (cur_plot) {
 		char **vecs = all_vecs_fn(cur_plot);
@@ -243,40 +293,84 @@ Dictionary CircuitSimulator::simulate_netlist(const String &p_netlist_text) {
 			for (int i = 0; vecs[i] != nullptr; ++i) {
 				char *vname = vecs[i];
 				pvector_info vinfo = vec_info_fn(vname);
-				if (vinfo && vinfo->v_realdata && vinfo->v_length > 0) {
+				if (vinfo && vinfo->v_length > 0 && (vinfo->v_realdata || vinfo->v_compdata)) {
 					String name_str = String(vname).to_lower();
-					double val = vinfo->v_realdata[0];
+					String node_name;
+					String device_name;
+					if (name_str.begins_with("v(") && name_str.ends_with(")")) {
+						node_name = name_str.substr(2, name_str.length() - 3);
+					} else if (name_str.begins_with("i(") && name_str.ends_with(")")) {
+						device_name = name_str.substr(2, name_str.length() - 3);
+					} else if (name_str.ends_with("#branch")) {
+						device_name = name_str.substr(0, name_str.length() - 7);
+					} else if (name_str.begins_with("@") && name_str.ends_with("[i]")) {
+						device_name = name_str.substr(1, name_str.length() - 4);
+					}
 
-					if (vinfo->v_length == 1) {
-						all_vectors[name_str] = val;
-						if (name_str.begins_with("v(") && name_str.ends_with(")")) {
-							String node_name = name_str.substr(2, name_str.length() - 3);
+					if (vinfo->v_compdata) {
+						Array values;
+						for (int k = 0; k < vinfo->v_length; ++k) {
+							values.append(Vector2((real_t)vinfo->v_compdata[k].cx_real, (real_t)vinfo->v_compdata[k].cx_imag));
+						}
+						all_vectors[name_str] = values;
+						if (!node_name.is_empty()) {
+							ac_voltages[node_name] = values;
+							double last_real = vinfo->v_compdata[vinfo->v_length - 1].cx_real;
+							double last_imag = vinfo->v_compdata[vinfo->v_length - 1].cx_imag;
+							node_voltages[node_name] = std::hypot(last_real, last_imag);
+						}
+						if (!device_name.is_empty()) {
+							ac_device_currents[device_name] = values;
+							double last_real = vinfo->v_compdata[vinfo->v_length - 1].cx_real;
+							double last_imag = vinfo->v_compdata[vinfo->v_length - 1].cx_imag;
+							branch_currents[device_name + "#branch"] = std::hypot(last_real, last_imag);
+						}
+					} else if (vinfo->v_realdata) {
+						double val = vinfo->v_realdata[vinfo->v_length - 1];
+						if (vinfo->v_length == 1) {
+							all_vectors[name_str] = val;
+						} else {
+							PackedFloat64Array values;
+							for (int k = 0; k < vinfo->v_length; ++k) {
+								values.append(vinfo->v_realdata[k]);
+							}
+							all_vectors[name_str] = values;
+						}
+
+						if (name_str == "frequency") {
+							for (int k = 0; k < vinfo->v_length; ++k) {
+								ac_frequencies.append(vinfo->v_realdata[k]);
+							}
+						}
+						if (!node_name.is_empty()) {
 							node_voltages[node_name] = val;
-						} else if (name_str.begins_with("i(") && name_str.ends_with(")")) {
-							String branch_name = name_str.substr(2, name_str.length() - 3);
-							branch_currents[branch_name] = val;
-						} else if (name_str.ends_with("#branch")) {
-							branch_currents[name_str] = val;
-						} else if (!name_str.contains("#") && name_str != "time") {
-							// Raw node name in SPICE OP analysis (e.g. "n1", "n2", "out")
+						} else if (!device_name.is_empty()) {
+							branch_currents[device_name + "#branch"] = val;
+						} else if (!name_str.contains("#") && name_str != "time" && name_str != "frequency") {
 							node_voltages[name_str] = val;
 						}
-					} else {
-						PackedFloat64Array arr;
-						for (int k = 0; k < vinfo->v_length; ++k) {
-							arr.append(vinfo->v_realdata[k]);
-						}
-						all_vectors[name_str] = arr;
 					}
 				}
 			}
 		}
 	}
 
+	if (mode == "ac" && ac_frequencies.is_empty()) {
+		result["error"] = "ngspice AC analysis did not return a frequency vector.";
+		result["log"] = get_last_log();
+		return result;
+	}
+
 	result["success"] = true;
+	result["analysis_mode"] = mode;
 	result["node_voltages"] = node_voltages;
 	result["branch_currents"] = branch_currents;
 	result["all_vectors"] = all_vectors;
+	if (mode == "ac") {
+		result["ac_voltages"] = ac_voltages;
+		result["ac_device_currents"] = ac_device_currents;
+		result["ac_frequencies_hz"] = ac_frequencies;
+	}
 	result["log"] = get_last_log();
 
 	Dictionary snap;
@@ -480,6 +574,22 @@ Dictionary CircuitSimulator::evaluate_component_telemetry(int p_type, const Stri
 		telem["current"] = curr;
 		telem["power"] = std::abs(v_src * curr);
 		telem["state_str"] = "Active Source";
+	}
+	else if (p_type == 5 || p_type == 6) { // CAPACITOR / INDUCTOR
+		String pin1_id = p_id + String(":p1");
+		String pin2_id = p_id + String(":p2");
+		String n1 = p_nodes.get(pin1_id, "0");
+		String n2 = p_nodes.get(pin2_id, "0");
+		double v_drop = helper_get_voltage(p_voltages, n1) - helper_get_voltage(p_voltages, n2);
+		String branch_name = p_id.to_lower() + String("#branch");
+		double current = 0.0;
+		if (p_currents.has(branch_name)) current = (double)p_currents[branch_name];
+		else if (p_currents.has(p_id + String("#branch"))) current = (double)p_currents[p_id + String("#branch")];
+
+		telem["v_drop"] = v_drop;
+		telem["current"] = current;
+		telem["power"] = v_drop * current;
+		telem["state_str"] = (p_type == 5) ? "Capacitor (transient)" : "Inductor (transient)";
 	}
 	else if (p_type == 7) { // DIODE
 		String n_a = p_nodes.get(p_id + String(":anode"), "0");

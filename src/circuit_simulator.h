@@ -49,6 +49,7 @@ public:
 	bool init_simulator(const String &p_dll_path = "");
 	bool is_available() const;
 	Dictionary simulate_netlist(const String &p_netlist_text);
+	Dictionary run_analysis(const String &p_netlist_text, const String &p_analysis_mode, const Dictionary &p_options = Dictionary());
 	Dictionary execute_command(const String &p_cmd);
 	String get_last_log() const;
 	void append_log(const char *msg);
